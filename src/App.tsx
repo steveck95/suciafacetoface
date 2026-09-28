@@ -270,8 +270,12 @@ export default function App() {
     setActiveTab(tab);
     if (tab === 'background') setSelectedElementId('background');
     else if (tab === 'band') setSelectedElementId('color-band');
-    else if (tab === 'decoration') setSelectedElementId('decoration');
-    else if (tab === 'logo') setSelectedElementId('logo');
+    else if (tab === 'decoration') {
+      const curr = liveState.elements.find((e) => e.id === selectedElementId);
+      if (!curr || curr.type !== 'decoration') {
+        setSelectedElementId('top-left-image');
+      }
+    } else if (tab === 'logo') setSelectedElementId('logo');
     else if (tab === 'text') {
       const curr = liveState.elements.find((e) => e.id === selectedElementId);
       if (!curr || curr.type !== 'text') {
@@ -330,13 +334,20 @@ export default function App() {
     imageRenderTick,
   ]);
 
-  // Handle uploading a custom image to replace the Penguin (Decoration) position
+  // Handle uploading a custom image to the selected image zone ('top-left-image' or 'decoration')
   const handleDecorationImageUpload = useCallback(
-    (file: File) => {
+    (file: File, targetElementId?: string) => {
       if (!file.type.startsWith('image/')) {
         showToast(t.toastInvalidImg);
         return;
       }
+      const resolvedId =
+        targetElementId ||
+        (selectedElementId === 'top-left-image' ||
+        selectedElementId === 'decoration'
+          ? selectedElementId
+          : 'top-left-image');
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = String(ev.target?.result || '');
@@ -345,23 +356,32 @@ export default function App() {
           setImageRenderTick((tTick) => tTick + 1);
         });
         updateElement(
-          'decoration',
+          resolvedId,
           {
             decorationStyle: 'custom-image',
             customImageUrl: dataUrl,
             customImageName: file.name,
-            labelZh: '自訂圖片 (企鵝區)',
+            labelZh:
+              resolvedId === 'top-left-image'
+                ? '左上自訂圖片區'
+                : '自訂圖片 (企鵝區)',
             visible: true,
           },
           true
         );
-        setSelectedElementId('decoration');
+        setSelectedElementId(resolvedId);
         setActiveTab('decoration');
         showToast(`${t.toastImgUploaded}${file.name}`);
       };
       reader.readAsDataURL(file);
     },
-    [showToast, t.toastImgUploaded, t.toastInvalidImg, updateElement]
+    [
+      selectedElementId,
+      showToast,
+      t.toastImgUploaded,
+      t.toastInvalidImg,
+      updateElement,
+    ]
   );
 
   // Convert Pointer Event to Canvas (1012x638) coordinates
@@ -769,16 +789,22 @@ export default function App() {
     scalePercent: number,
     commit: boolean
   ) => {
-    const decEl = liveState.elements.find((e) => e.id === 'decoration');
+    const decEl = liveState.elements.find(
+      (e) => e.id === selectedElementId && e.type === 'decoration'
+    );
     if (!decEl) return;
+    const isTopLeft = decEl.id === 'top-left-image';
     const baseW = 220;
-    const baseH = 270;
+    const baseH = isTopLeft ? 140 : 270;
     const aspect = decEl.height > 0 ? decEl.width / decEl.height : baseW / baseH;
     const centerX = decEl.x + decEl.width / 2;
     const centerY = decEl.y + decEl.height / 2;
 
-    const newH = Math.max(24, Math.min(620, Math.round((baseH * scalePercent) / 100)));
-    const newW = Math.max(24, Math.min(980, Math.round(newH * aspect)));
+    const newH = Math.max(
+      20,
+      Math.min(620, Math.round((baseH * scalePercent) / 100))
+    );
+    const newW = Math.max(20, Math.min(980, Math.round(newH * aspect)));
     const newX = Math.round(centerX - newW / 2);
     const newY = Math.round(centerY - newH / 2);
 
@@ -802,12 +828,16 @@ export default function App() {
 
   const isCustomImageActive =
     selectedElement.type === 'decoration' &&
-    selectedElement.decorationStyle === 'custom-image' &&
-    Boolean(selectedElement.customImageUrl);
+    (selectedElement.id === 'top-left-image' ||
+      (selectedElement.decorationStyle === 'custom-image' &&
+        Boolean(selectedElement.customImageUrl)));
+
+  const baseDecorationHeight =
+    selectedElement.id === 'top-left-image' ? 140 : 270;
 
   const currentScalePercent =
     selectedElement.type === 'decoration'
-      ? Math.round((selectedElement.height / 270) * 100)
+      ? Math.round((selectedElement.height / baseDecorationHeight) * 100)
       : 100;
 
   return (
@@ -1213,14 +1243,53 @@ export default function App() {
               </div>
             )}
 
-            {/* Decoration / Custom Image Controls (Free Size & Rotation Angle) */}
+            {/* Decoration / Custom Image Controls (Supports Both Top-Left Custom Image Zone & Bottom-Right Penguin Zone) */}
             {selectedElement.type === 'decoration' && (
               <div className="space-y-3.5">
+                {/* 0. Image Zone Switcher: 左上自訂圖片區 vs 右下企鵝／圖片區 */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+                  <div className="text-xs font-semibold text-slate-700">
+                    {t.selectImageZone}
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        {
+                          id: 'top-left-image',
+                          label: t.topLeftImageZone,
+                        },
+                        {
+                          id: 'decoration',
+                          label: t.penguinImageZone,
+                        },
+                      ] as const
+                    ).map((zone) => {
+                      const active = selectedElement.id === zone.id;
+                      return (
+                        <button
+                          key={zone.id}
+                          type="button"
+                          onClick={() => selectElementAndSyncTab(zone.id, false)}
+                          className={`px-2.5 py-2 rounded-lg text-xs font-medium text-left border transition-all ${
+                            active
+                              ? 'bg-white border-emerald-600 text-slate-900 shadow-xs ring-1 ring-emerald-600/20 font-semibold'
+                              : 'bg-white/60 border-slate-200 text-slate-600 hover:bg-white hover:text-slate-900'
+                          }`}
+                        >
+                          {zone.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* 1. Upload / Switch Image Card */}
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-700">
-                      {t.customImageSectionTitle}
+                      {selectedElement.id === 'top-left-image'
+                        ? t.topLeftImageSectionTitle
+                        : t.customImageSectionTitle}
                     </span>
                     <button
                       type="button"
@@ -1245,7 +1314,8 @@ export default function App() {
                       e.preventDefault();
                       e.stopPropagation();
                       const file = e.dataTransfer.files?.[0];
-                      if (file) handleDecorationImageUpload(file);
+                      if (file)
+                        handleDecorationImageUpload(file, selectedElement.id);
                     }}
                     className="p-3 bg-white rounded-xl border border-dashed border-emerald-300 hover:border-emerald-500 transition-colors"
                   >
@@ -1272,28 +1342,55 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              updateElement(
-                                selectedElement.id,
-                                {
-                                  decorationStyle: 'penguin-mascot',
-                                  customImageUrl: undefined,
-                                  customImageName: undefined,
-                                  rotation: 0,
-                                  x: 710,
-                                  y: 318,
-                                  width: 220,
-                                  height: 270,
-                                  labelZh: '裝飾圖案 (企鵝)',
-                                },
-                                true
-                              );
-                              showToast(t.toastRestoredPenguin);
+                              if (selectedElement.id === 'top-left-image') {
+                                updateElement(
+                                  selectedElement.id,
+                                  {
+                                    decorationStyle: 'custom-image',
+                                    customImageUrl: undefined,
+                                    customImageName: undefined,
+                                    rotation: 0,
+                                    x: 70,
+                                    y: 68,
+                                    width: 220,
+                                    height: 140,
+                                    labelZh: '左上自訂圖片區',
+                                  },
+                                  true
+                                );
+                                showToast(t.toastRemovedCustomImage);
+                              } else {
+                                updateElement(
+                                  selectedElement.id,
+                                  {
+                                    decorationStyle: 'penguin-mascot',
+                                    customImageUrl: undefined,
+                                    customImageName: undefined,
+                                    rotation: 0,
+                                    x: 710,
+                                    y: 318,
+                                    width: 220,
+                                    height: 270,
+                                    labelZh: '裝飾圖案 (企鵝)',
+                                  },
+                                  true
+                                );
+                                showToast(t.toastRestoredPenguin);
+                              }
                             }}
                             className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-md shrink-0"
-                            title={t.restorePenguinTitle}
+                            title={
+                              selectedElement.id === 'top-left-image'
+                                ? t.removeCustomImageTitle
+                                : t.restorePenguinTitle
+                            }
                           >
                             <Trash2 className="w-3.5 h-3.5" />
-                            <span>{t.restorePenguin}</span>
+                            <span>
+                              {selectedElement.id === 'top-left-image'
+                                ? t.removeCustomImage
+                                : t.restorePenguin}
+                            </span>
                           </button>
                         </div>
 
@@ -1359,14 +1456,23 @@ export default function App() {
                       onClick={() =>
                         updateElement(
                           selectedElement.id,
-                          {
-                            x: 710,
-                            y: 318,
-                            width: 220,
-                            height: 270,
-                            rotation: 0,
-                            borderRadius: 0,
-                          },
+                          selectedElement.id === 'top-left-image'
+                            ? {
+                                x: 70,
+                                y: 68,
+                                width: 220,
+                                height: 140,
+                                rotation: 0,
+                                borderRadius: 0,
+                              }
+                            : {
+                                x: 710,
+                                y: 318,
+                                width: 220,
+                                height: 270,
+                                rotation: 0,
+                                borderRadius: 0,
+                              },
                           true
                         )
                       }

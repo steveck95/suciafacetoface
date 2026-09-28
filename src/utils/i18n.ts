@@ -19,6 +19,11 @@ const ELEMENT_LABELS: Record<string, Record<Language, string>> = {
     ja: 'カラーバンド',
     en: 'Color Band',
   },
+  'top-left-image': {
+    zh: '左上自訂圖片區',
+    ja: '左上カスタム画像',
+    en: 'Top-Left Image',
+  },
   decoration: {
     zh: '裝飾圖案 (企鵝)',
     ja: 'ペンギン / 画像',
@@ -34,16 +39,6 @@ const ELEMENT_LABELS: Record<string, Record<Language, string>> = {
     ja: 'メインタイトル',
     en: 'Main Title',
   },
-  subtitle: {
-    zh: '副標題',
-    ja: 'サブタイトル',
-    en: 'Subtitle',
-  },
-  'small-text': {
-    zh: '小字區域',
-    ja: '小文字エリア',
-    en: 'Small Text',
-  },
   number: {
     zh: '編號區域',
     ja: 'カード番号',
@@ -52,9 +47,12 @@ const ELEMENT_LABELS: Record<string, Record<Language, string>> = {
 };
 
 export function getElementDisplayLabel(el: CardElement, lang: Language): string {
+  if (el.id === 'top-left-image') {
+    return ELEMENT_LABELS['top-left-image'][lang];
+  }
   if (el.id === 'decoration' && el.type === 'decoration' && el.customImageUrl) {
-    if (lang === 'ja') return 'カスタム画像';
-    if (lang === 'en') return 'Custom Image';
+    if (lang === 'ja') return '右下カスタム画像';
+    if (lang === 'en') return 'Penguin Area Image';
     return '自訂圖片 (企鵝區)';
   }
   if (ELEMENT_LABELS[el.id]) {
@@ -104,6 +102,13 @@ export const UI_TEXT = {
       'top-band': '上方水平色帶',
       'diagonal-split': '反向斜角切分',
     },
+    selectImageZone: '選擇要編輯的圖片區域',
+    topLeftImageZone: '左上自訂圖片區',
+    penguinImageZone: '右下企鵝／圖片區',
+    topLeftImageSectionTitle: '左上自訂圖片上傳',
+    removeCustomImage: '移除圖片',
+    removeCustomImageTitle: '移除此區域的自訂圖片',
+    toastRemovedCustomImage: '已移除左上自訂圖片',
     customImageSectionTitle: '自訂圖片上傳 (取代企鵝位置)',
     changeImage: '更換圖片',
     uploadImageBtn: '上傳圖片',
@@ -224,6 +229,13 @@ export const UI_TEXT = {
       'top-band': '上部水平バンド',
       'diagonal-split': '逆方向斜めカット',
     },
+    selectImageZone: '編集する画像エリアを選択',
+    topLeftImageZone: '左上カスタム画像',
+    penguinImageZone: '右下ペンギン / 画像',
+    topLeftImageSectionTitle: '左上カスタム画像のアップロード',
+    removeCustomImage: '画像を削除',
+    removeCustomImageTitle: 'このエリアのカスタム画像を削除',
+    toastRemovedCustomImage: '左上カスタム画像を削除しました',
     customImageSectionTitle: 'カスタム画像アップロード (ペンギン位置)',
     changeImage: '画像を変更',
     uploadImageBtn: '画像をアップロード',
@@ -344,6 +356,13 @@ export const UI_TEXT = {
       'top-band': 'Top Horizontal Band',
       'diagonal-split': 'Reverse Diagonal Split',
     },
+    selectImageZone: 'Select Image Zone to Edit',
+    topLeftImageZone: 'Top-Left Custom Image',
+    penguinImageZone: 'Penguin / Bottom-Right',
+    topLeftImageSectionTitle: 'Top-Left Custom Image Upload',
+    removeCustomImage: 'Remove Image',
+    removeCustomImageTitle: 'Remove custom image from this zone',
+    toastRemovedCustomImage: 'Removed top-left custom image',
     customImageSectionTitle: 'Custom Image Upload (Penguin Area)',
     changeImage: 'Change Image',
     uploadImageBtn: 'Upload Image',

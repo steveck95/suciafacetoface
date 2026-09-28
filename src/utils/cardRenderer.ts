@@ -889,6 +889,53 @@ export function renderCardToCanvas(
       ctx.restore();
     }
 
+    // 1b. Subtle placeholder outline for empty custom-image zones (e.g. top-left-image) when handles are visible
+    if (options.selectedElementId) {
+      for (const el of state.elements) {
+        if (
+          el.visible &&
+          el.type === 'decoration' &&
+          el.decorationStyle === 'custom-image' &&
+          !el.customImageUrl
+        ) {
+          const b = getElementBounds(el, ctx);
+          const cx = b.x + b.width / 2;
+          const cy = b.y + b.height / 2;
+          const rot = el.rotation || 0;
+          const isSelected = el.id === options.selectedElementId;
+
+          ctx.save();
+          if (rot !== 0) {
+            ctx.translate(cx, cy);
+            ctx.rotate((rot * Math.PI) / 180);
+            ctx.translate(-cx, -cy);
+          }
+
+          ctx.fillStyle = isSelected
+            ? 'rgba(255, 255, 255, 0.22)'
+            : 'rgba(255, 255, 255, 0.14)';
+          ctx.beginPath();
+          ctx.roundRect(b.x, b.y, b.width, b.height, el.borderRadius || 12);
+          ctx.fill();
+
+          if (!isSelected) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+          ctx.font = '600 13px "Plus Jakarta Sans", "Noto Sans TC", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('＋ 自訂圖片區', cx, cy);
+          ctx.restore();
+        }
+      }
+    }
+
     // 2. Selected Element Bounding Box (with Rotation Handle & Resize Corners)
     if (options.selectedElementId) {
       const selEl = state.elements.find(
@@ -1079,7 +1126,10 @@ function elementToSvgMarkup(
     const rotWrapStart = rot !== 0 ? `<g transform="rotate(${rot} ${cx} ${cy})">` : '';
     const rotWrapEnd = rot !== 0 ? `</g>` : '';
 
-    if (shapeEl.decorationStyle === 'custom-image' && shapeEl.customImageUrl) {
+    if (shapeEl.decorationStyle === 'custom-image') {
+      if (!shapeEl.customImageUrl) {
+        return '';
+      }
       const fit = shapeEl.imageFit || 'contain';
       const preserve =
         fit === 'fill'
