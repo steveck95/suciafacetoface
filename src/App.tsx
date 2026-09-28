@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Copy,
   Download,
   FileCode2,
   FileJson,
@@ -10,8 +11,10 @@ import {
   Redo2,
   RotateCcw,
   RotateCw,
+  Share2,
   Trash2,
   Undo2,
+  X,
 } from 'lucide-react';
 import {
   BandShapeStyle,
@@ -90,6 +93,16 @@ export default function App() {
 
   // Export PNG Scale (1x, 2x, 3x)
   const [pngScale, setPngScale] = useState<1 | 2 | 3>(2);
+
+  // Mobile-friendly Exported PNG Preview & Save Modal State
+  const [exportedImage, setExportedImage] = useState<{
+    dataUrl: string;
+    blob: Blob;
+    filename: string;
+    width: number;
+    height: number;
+    scale: 1 | 2 | 3;
+  } | null>(null);
 
   // JSON Modal State
   const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
@@ -647,33 +660,121 @@ export default function App() {
     setCustomPresets((prev) => prev.filter((p) => p.id !== id));
   };
 
+  // Convert DataURL synchronously to Blob (preserves mobile user-gesture activation)
+  const dataUrlToBlob = (dataUrl: string): Blob => {
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const binary = atob(parts[1] || '');
+    const array = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      array[i] = binary.charCodeAt(i);
+    }
+    return new Blob([array], { type: mime });
+  };
+
+  // Mobile-compatible Blob file download helper (appends to body & delays revokeObjectURL)
+  const triggerBlobDownload = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 15000);
+  };
+
+  // Generate PNG DataURL + Blob at specified scale (1x, 2x, 3x)
+  const generateExportPngPayload = useCallback(
+    (scale: 1 | 2 | 3) => {
+      const offscreen = document.createElement('canvas');
+      renderCardToCanvas(offscreen, liveState, {
+        scale,
+        includeOverlays: false,
+      });
+      const dataUrl = offscreen.toDataURL('image/png');
+      const blob = dataUrlToBlob(dataUrl);
+      const width = liveState.canvas.width * scale;
+      const height = liveState.canvas.height * scale;
+      const filename = `suica-card-${width}x${height}-${scale}x.png`;
+      return { dataUrl, blob, filename, width, height, scale };
+    },
+    [liveState]
+  );
+
   // Export PNG (1x, 2x, 3x - Card face only, no overlays!)
   const handleExportPNG = (scale: 1 | 2 | 3 = pngScale) => {
-    const offscreen = document.createElement('canvas');
-    renderCardToCanvas(offscreen, liveState, {
-      scale,
-      includeOverlays: false,
-    });
-    const dataUrl = offscreen.toDataURL('image/png');
-    const link = document.createElement('a');
-    const w = liveState.canvas.width * scale;
-    const h = liveState.canvas.height * scale;
-    link.download = `suica-card-${w}x${h}-${scale}x.png`;
-    link.href = dataUrl;
-    link.click();
-    showToast(`${t.toastExportPng} (${scale}x: ${w} × ${h} px)`);
+    const payload = generateExportPngPayload(scale);
+    setExportedImage(payload);
+
+    // On non-iOS browsers, trigger direct file download immediately in addition to opening the save modal
+    const isIOS =
+      typeof navigator !== 'undefined' &&
+      (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+    if (!isIOS) {
+      triggerBlobDownload(payload.blob, payload.filename);
+    }
+
+    showToast(
+      `${t.toastExportPng} (${scale}x: ${payload.width} × ${payload.height} px)`
+    );
+  };
+
+  // Share or Save to Photos via Mobile Native Web Share API (with file fallback)
+  const handleShareOrSaveImage = async () => {
+    if (!exportedImage) return;
+    try {
+      const file = new File([exportedImage.blob], exportedImage.filename, {
+        type: 'image/png',
+      });
+      if (
+        typeof navigator !== 'undefined' &&
+        navigator.share &&
+        (!navigator.canShare || navigator.canShare({ files: [file] }))
+      ) {
+        await navigator.share({
+          files: [file],
+          title: t.appTitle,
+        });
+        return;
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+    }
+    triggerBlobDownload(exportedImage.blob, exportedImage.filename);
+  };
+
+  // Copy PNG Image to Clipboard
+  const handleCopyExportedImage = async () => {
+    if (!exportedImage) return;
+    try {
+      if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': exportedImage.blob }),
+        ]);
+        showToast(t.toastImageCopied);
+        return;
+      }
+    } catch {
+      // fallback to download if clipboard denied
+    }
+    triggerBlobDownload(exportedImage.blob, exportedImage.filename);
   };
 
   // Export SVG
   const handleExportSVG = () => {
     const svgString = generateCardSVG(liveState);
     const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = 'suica-card-face.svg';
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerBlobDownload(blob, 'suica-card-face.svg');
     showToast(t.toastExportSvg);
   };
 
@@ -681,12 +782,7 @@ export default function App() {
   const handleExportJSON = () => {
     const jsonStr = JSON.stringify(liveState, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.download = 'suica-card-project.json';
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+    triggerBlobDownload(blob, 'suica-card-project.json');
     showToast(t.toastExportJson);
   };
 
@@ -1808,6 +1904,126 @@ export default function App() {
           </div>
         </aside>
       </main>
+
+      {/* Mobile-Friendly Export & Save PNG Modal (Supports Long-Press to Save to Photos, Native Share Sheet & Direct Blob Download) */}
+      {exportedImage && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+          onClick={() => setExportedImage(null)}
+        >
+          <div
+            className="bg-white rounded-2xl border border-slate-200 max-w-xl w-full p-4 sm:p-5 space-y-4 shadow-2xl my-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">
+                  {t.exportModalTitle}
+                </h3>
+                <p className="text-xs font-mono text-slate-500">
+                  {exportedImage.width} × {exportedImage.height} px (
+                  {exportedImage.scale}x)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportedImage(null)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>{t.close}</span>
+              </button>
+            </div>
+
+            {/* Prominent Mobile Long-Press Instruction Banner */}
+            <div className="px-3.5 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-medium text-emerald-900 leading-relaxed">
+              {t.exportModalMobileTip}
+            </div>
+
+            {/* Rendered High-Res PNG Image (Supports Native Mobile Long-Press -> Save to Photos) */}
+            <div className="bg-slate-100 rounded-xl p-3 sm:p-4 border border-slate-200/80 flex items-center justify-center">
+              <img
+                src={exportedImage.dataUrl}
+                alt={exportedImage.filename}
+                className="w-full max-w-[480px] h-auto block rounded-[16px] shadow-md select-auto pointer-events-auto"
+                style={{
+                  WebkitTouchCallout: 'default',
+                  WebkitUserSelect: 'auto',
+                  userSelect: 'auto',
+                }}
+              />
+            </div>
+
+            {/* Resolution Switcher inside Modal */}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-xs font-semibold text-slate-700">
+                {t.resolution}
+              </span>
+              <div className="inline-flex p-1 bg-slate-100 rounded-xl gap-1">
+                {(
+                  [
+                    { scale: 1, label: '1x (1012×638)' },
+                    { scale: 2, label: '2x (2024×1276)' },
+                    { scale: 3, label: '3x (3036×1914)' },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.scale}
+                    type="button"
+                    onClick={() => {
+                      setPngScale(item.scale);
+                      setExportedImage(generateExportPngPayload(item.scale));
+                    }}
+                    className={`py-1 px-2.5 rounded-lg text-xs transition-all whitespace-nowrap ${
+                      exportedImage.scale === item.scale
+                        ? 'bg-white text-slate-900 shadow-xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900 font-medium'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Buttons: Share / Save to Photos, Direct File Download, Copy Image */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleShareOrSaveImage}
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>{t.exportModalShareBtn}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  triggerBlobDownload(
+                    exportedImage.blob,
+                    exportedImage.filename
+                  )
+                }
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{t.exportModalDownloadBtn}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopyExportedImage}
+                className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>{t.exportModalCopyBtn}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project JSON View / Edit / Load Modal */}
       {isJsonModalOpen && (

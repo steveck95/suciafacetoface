@@ -183,6 +183,13 @@ export const UI_TEXT = {
     chooseJsonFile: '從電腦選擇 .json 檔案',
     downloadJson: '下載 .json',
     applyJson: '套用此 JSON 專案',
+    exportModalTitle: '匯出卡面圖片 (PNG)',
+    exportModalMobileTip:
+      '📱 手機用戶請直接「長按下方圖片」選擇「加入照片／儲存圖片」，或使用下方按鈕下載',
+    exportModalDownloadBtn: '直接下載 PNG 檔案',
+    exportModalShareBtn: '呼叫系統分享／存入相簿',
+    exportModalCopyBtn: '複製圖片',
+    toastImageCopied: '已複製卡面圖片至剪貼簿',
   },
   ja: {
     appTitle: 'Suica カードフェイス作成ツール',
@@ -296,6 +303,13 @@ export const UI_TEXT = {
     chooseJsonFile: '.json ファイルを選択',
     downloadJson: '.json をダウンロード',
     applyJson: 'このJSONを適用',
+    exportModalTitle: 'カード画像の保存・書き出し (PNG)',
+    exportModalMobileTip:
+      '📱 スマホの場合は下の画像を「長押し」して「"写真"に追加 / 画像を保存」を選択するか、下のボタンをご利用ください',
+    exportModalDownloadBtn: 'PNGファイルをダウンロード',
+    exportModalShareBtn: '共有・写真に保存',
+    exportModalCopyBtn: '画像をコピー',
+    toastImageCopied: '画像をクリップボードにコピーしました',
   },
   en: {
     appTitle: 'Suica Card Face Studio',
@@ -409,5 +423,12 @@ export const UI_TEXT = {
     chooseJsonFile: 'Choose .json file',
     downloadJson: 'Download .json',
     applyJson: 'Apply JSON Project',
+    exportModalTitle: 'Save & Export Card Image (PNG)',
+    exportModalMobileTip:
+      '📱 On Mobile: Long-press the image below and select "Save to Photos / Download Image", or use the buttons below',
+    exportModalDownloadBtn: 'Download PNG File',
+    exportModalShareBtn: 'Share / Save to Photos',
+    exportModalCopyBtn: 'Copy Image',
+    toastImageCopied: 'Copied card image to clipboard',
   },
 } as const;
