@@ -3,8 +3,6 @@ import {
   Copy,
   Download,
   FileCode2,
-  FileJson,
-  FolderOpen,
   Globe,
   ImagePlus,
   Maximize2,
@@ -17,16 +15,10 @@ import {
   X,
 } from 'lucide-react';
 import {
-  BandShapeStyle,
   CardElement,
   CardProjectState,
   ColorPresetItem,
   createInitialCardState,
-  DecorationPatternStyle,
-  DEFAULT_CANVAS_HEIGHT,
-  DEFAULT_CANVAS_WIDTH,
-  ImageFitMode,
-  ShapeCardElement,
   TextCardElement,
 } from './types/card';
 import {
@@ -104,11 +96,6 @@ export default function App() {
     scale: 1 | 2 | 3;
   } | null>(null);
 
-  // JSON Modal State
-  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
-  const [jsonText, setJsonText] = useState('');
-  const [jsonError, setJsonError] = useState<string | null>(null);
-
   // Toast Feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -133,7 +120,6 @@ export default function App() {
 
   // Canvas & File Input Refs
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const decorationImageInputRef = useRef<HTMLInputElement | null>(null);
   const [imageRenderTick, setImageRenderTick] = useState(0);
 
@@ -778,144 +764,6 @@ export default function App() {
     showToast(t.toastExportSvg);
   };
 
-  // Export / Save Project JSON
-  const handleExportJSON = () => {
-    const jsonStr = JSON.stringify(liveState, null, 2);
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    triggerBlobDownload(blob, 'suica-card-project.json');
-    showToast(t.toastExportJson);
-  };
-
-  // Load Project JSON from file or modal
-  const parseAndLoadProjectJson = (rawJson: string) => {
-    try {
-      const parsed = JSON.parse(rawJson);
-      if (!parsed || !Array.isArray(parsed.elements)) {
-        throw new Error('JSON missing elements array');
-      }
-      const baseDefaults = createInitialCardState();
-      const normalizedElements: CardElement[] = parsed.elements.map(
-        (item: Record<string, unknown>, idx: number) => {
-          const hexColor = normalizeHex(
-            String(item.fill || item.color || '#008C95')
-          );
-          const isText = item.type === 'text';
-          if (isText) {
-            return {
-              id: String(item.id || `text-${idx}`),
-              name: String(item.name || item.id || `Text ${idx + 1}`),
-              labelZh: String(item.labelZh || item.name || item.id || '文字'),
-              category: 'text',
-              type: 'text',
-              text: String(item.text ?? 'Suica'),
-              x: Number(item.x ?? 100),
-              y: Number(item.y ?? 100),
-              width: Number(item.width ?? 300),
-              height: Number(item.height ?? 60),
-              fill: hexColor,
-              color: hexColor,
-              opacity: Number(item.opacity ?? 1),
-              brightness: Number(item.brightness ?? 0),
-              rotation: Number(item.rotation ?? 0),
-              visible: item.visible !== false,
-              locked: Boolean(item.locked),
-              fontFamily: String(
-                item.fontFamily ||
-                  '"Plus Jakarta Sans", "Noto Sans TC", "Noto Sans JP", sans-serif'
-              ),
-              fontSize: Number(item.fontSize ?? 48),
-              fontWeight: Number(item.fontWeight ?? 700),
-              letterSpacing: Number(item.letterSpacing ?? 2),
-              lineHeight: Number(item.lineHeight ?? 1.2),
-              textAlign:
-                item.textAlign === 'center' || item.textAlign === 'right'
-                  ? item.textAlign
-                  : 'left',
-              suicaInlineStyle: Boolean(item.suicaInlineStyle),
-            } as TextCardElement;
-          }
-
-          return {
-            id: String(item.id || `shape-${idx}`),
-            name: String(item.name || item.id || `Layer ${idx + 1}`),
-            labelZh: String(item.labelZh || item.name || item.id || '圖層'),
-            category: (item.category as CardElement['category']) || 'custom',
-            type: (item.type as ShapeCardElement['type']) || 'rectangle',
-            x: Number(item.x ?? 0),
-            y: Number(item.y ?? 0),
-            width: Number(item.width ?? DEFAULT_CANVAS_WIDTH),
-            height: Number(item.height ?? DEFAULT_CANVAS_HEIGHT),
-            fill: hexColor,
-            color: hexColor,
-            secondaryFill: item.secondaryFill
-              ? String(item.secondaryFill)
-              : undefined,
-            opacity: Number(item.opacity ?? 1),
-            brightness: Number(item.brightness ?? 0),
-            rotation: Number(item.rotation ?? 0),
-            visible: item.visible !== false,
-            locked: Boolean(item.locked),
-            borderRadius: Number(item.borderRadius ?? 24),
-            bandStyle: item.bandStyle as BandShapeStyle | undefined,
-            slantOffset:
-              item.slantOffset !== undefined
-                ? Number(item.slantOffset)
-                : undefined,
-            decorationStyle: item.decorationStyle as
-              | DecorationPatternStyle
-              | undefined,
-            customImageUrl: item.customImageUrl
-              ? String(item.customImageUrl)
-              : undefined,
-            customImageName: item.customImageName
-              ? String(item.customImageName)
-              : undefined,
-            imageFit: (item.imageFit as ImageFitMode) || 'contain',
-          } as ShapeCardElement;
-        }
-      );
-
-      normalizedElements.forEach((el) => {
-        if (el.type === 'decoration' && el.customImageUrl) {
-          preloadCardImage(el.customImageUrl, () =>
-            setImageRenderTick((tTick) => tTick + 1)
-          );
-        }
-      });
-
-      const loadedState: CardProjectState = {
-        canvas: {
-          width: Number(parsed.canvas?.width || baseDefaults.canvas.width),
-          height: Number(parsed.canvas?.height || baseDefaults.canvas.height),
-        },
-        elements: normalizedElements,
-        scopeRules: [],
-      };
-
-      commitState(loadedState);
-      if (normalizedElements.length > 0) {
-        setSelectedElementId(normalizedElements[0].id);
-      }
-      setJsonError(null);
-      setIsJsonModalOpen(false);
-      showToast(t.toastLoadJson);
-    } catch (err) {
-      setJsonError(err instanceof Error ? err.message : 'Invalid JSON');
-    }
-  };
-
-  const handleFileUploadJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const content = String(ev.target?.result || '');
-      parseAndLoadProjectJson(content);
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
   // Proportional Scale Helper for Decoration / Custom Image (keeps center anchored)
   const handleScaleDecorationProportionally = (
     scalePercent: number,
@@ -1212,7 +1060,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Export & JSON Buttons */}
+            {/* Export Buttons */}
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -1233,31 +1081,6 @@ export default function App() {
                 <FileCode2 className="w-3.5 h-3.5" />
                 <span>{t.exportSvg}</span>
               </button>
-
-              <button
-                type="button"
-                onClick={handleExportJSON}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap"
-              >
-                <FileJson className="w-3.5 h-3.5" />
-                <span>{t.saveJson}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors whitespace-nowrap"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span>{t.loadJson}</span>
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={handleFileUploadJSON}
-                className="hidden"
-              />
             </div>
           </div>
         </section>
@@ -2020,71 +1843,6 @@ export default function App() {
                 <Copy className="w-3.5 h-3.5" />
                 <span>{t.exportModalCopyBtn}</span>
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Project JSON View / Edit / Load Modal */}
-      {isJsonModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 max-w-2xl w-full p-5 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  {t.jsonModalTitle}
-                </h3>
-                <p className="text-xs text-slate-500">{t.jsonModalDesc}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsJsonModalOpen(false)}
-                className="px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-slate-800 bg-slate-100 rounded-lg"
-              >
-                {t.close}
-              </button>
-            </div>
-
-            <textarea
-              rows={12}
-              value={jsonText}
-              onChange={(e) => setJsonText(e.target.value)}
-              className="w-full p-3 text-xs font-mono bg-slate-950 text-emerald-300 rounded-xl border border-slate-800 focus:outline-none"
-            />
-
-            {jsonError && (
-              <div className="text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-                {jsonError}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span>{t.chooseJsonFile}</span>
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportJSON}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>{t.downloadJson}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => parseAndLoadProjectJson(jsonText)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors"
-                >
-                  <span>{t.applyJson}</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>
